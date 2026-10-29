@@ -7,7 +7,9 @@
 
 #include <FirelinkFLVER/Exceptions.h>
 
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 
 
 namespace Firelink

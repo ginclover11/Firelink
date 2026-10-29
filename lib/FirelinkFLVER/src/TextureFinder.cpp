@@ -6,6 +6,7 @@
 #include <FirelinkCore/Logging.h>
 #include <FirelinkCore/Paths.h>
 
+#include <mutex>
 #include <regex>
 
 #include <algorithm>

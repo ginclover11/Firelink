@@ -7,6 +7,7 @@
 #include <FirelinkFLVER/VertexFormats.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <functional>
 #include <numeric>

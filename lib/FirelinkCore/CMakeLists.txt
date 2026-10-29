@@ -84,11 +84,23 @@ include(FetchContent)
 
 macro(get_firelink_core_dependencies)
 
+    # Outside Windows, build dependencies privately: `EXCLUDE_FROM_ALL` (FetchContent, CMake 3.28+) skips their install()
+    # rules, so they are not copied into the Python wheel, and CMake does not require them to be in export sets.
+    # Targets we link against are still built on demand.
+    set(_FIRELINK_FC_ARGS "")
+    if(NOT WIN32)
+        if(CMAKE_VERSION VERSION_LESS 3.28)
+            message(FATAL_ERROR "CMake 3.28 or newer is required to build Firelink outside Windows (found ${CMAKE_VERSION}).")
+        endif()
+        set(_FIRELINK_FC_ARGS EXCLUDE_FROM_ALL)
+    endif()
+
     # --- zlib ---
     FetchContent_Declare(
         zlib
         GIT_REPOSITORY https://github.com/madler/zlib.git
         GIT_TAG        v1.3.2
+        ${_FIRELINK_FC_ARGS}
     )
     set(ZLIB_BUILD_TESTING OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(zlib)
@@ -105,6 +117,7 @@ macro(get_firelink_core_dependencies)
         GIT_REPOSITORY https://github.com/facebook/zstd.git
         GIT_TAG        v1.5.7
         SOURCE_SUBDIR  build/cmake
+        ${_FIRELINK_FC_ARGS}
     )
     set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
     set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -122,8 +135,8 @@ macro(get_firelink_core_dependencies)
 
     # --- DirectXMath / DirectX-Headers / stb (non-Windows only) ---
     # On Windows, DirectXTex uses the Windows SDK. Everywhere else it needs the DirectXMath and DirectX-Headers packages
-    # (DXGI format enums, SAL/HRESULT adapters), which we fetch here. Populating them with FetchContent also makes
-    # DirectXTex's own `find_package(directxmath)` / `find_package(directx-headers)` calls resolve to these copies.
+    # (DXGI format enums, SAL/HRESULT adapters), which we fetch here. `OVERRIDE_FIND_PACKAGE` makes DirectXTex's own
+    # `find_package(directxmath)` / `find_package(directx-headers)` calls resolve to these copies.
     # `stb` provides PNG I/O in place of WIC (see src/PngCodec.cpp); it is header-only and has no CMakeLists.
     if(NOT WIN32)
         FetchContent_Declare(
@@ -131,17 +144,34 @@ macro(get_firelink_core_dependencies)
             GIT_REPOSITORY https://github.com/microsoft/DirectXMath.git
             GIT_TAG        oct2024
             GIT_SHALLOW    TRUE
+            # DirectXTex calls `find_package(directxmath CONFIG REQUIRED)`; resolve it to this copy.
+            OVERRIDE_FIND_PACKAGE
+            ${_FIRELINK_FC_ARGS}
         )
         FetchContent_Declare(
             directx-headers
             GIT_REPOSITORY https://github.com/microsoft/DirectX-Headers.git
             GIT_TAG        v1.721.2
             GIT_SHALLOW    TRUE
+            # DirectXTex calls `find_package(directx-headers CONFIG REQUIRED)`; resolve it to this copy.
+            OVERRIDE_FIND_PACKAGE
+            ${_FIRELINK_FC_ARGS}
         )
         set(DXHEADERS_BUILD_TEST        OFF CACHE BOOL "" FORCE)
         set(DXHEADERS_BUILD_GOOGLE_TEST OFF CACHE BOOL "" FORCE)
         set(DXHEADERS_INSTALL           OFF CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(directxmath directx-headers)
+
+        # DirectXMath (and DirectXTex) include "sal.h" (MSVC source annotations), which only exists on Windows. The .NET
+        # runtime ships an MIT-licensed open-source version, which is what DirectXMath's own Linux CI uses.
+        FetchContent_Declare(
+            sal
+            URL      https://raw.githubusercontent.com/dotnet/runtime/v8.0.1/src/coreclr/pal/inc/rt/sal.h
+            URL_HASH SHA256=7dae281adc3a09a691291fb90526f05e4f9ef8b16d7f33d716ba690f7241a492
+            DOWNLOAD_NO_EXTRACT TRUE
+        )
+        FetchContent_MakeAvailable(sal)
+        target_include_directories(DirectXMath INTERFACE "${sal_SOURCE_DIR}")
 
         # DirectXMath only defines its namespaced target when installed; DirectXTex links the namespaced name.
         if(NOT TARGET Microsoft::DirectXMath)
@@ -163,6 +193,7 @@ macro(get_firelink_core_dependencies)
             DirectXTex
             GIT_REPOSITORY https://github.com/microsoft/DirectXTex.git
             GIT_TAG        oct2025
+            ${_FIRELINK_FC_ARGS}
     )
     set(BUILD_TOOLS    OFF CACHE BOOL "" FORCE)
     set(BUILD_SAMPLE   OFF CACHE BOOL "" FORCE)

@@ -78,11 +78,16 @@ endif()
 # Add Firelink executables.
 add_subdirectory(app)
 
-install(EXPORT FirelinkTargets
-        FILE FirelinkTargets.cmake
-        NAMESPACE Firelink::
-        DESTINATION lib/cmake/Firelink
-)
+# The CMake package export is Windows-only: on other platforms the third-party dependencies (zlib, zstd, DirectXTex...)
+# are built privately into the modules with `EXCLUDE_FROM_ALL` (see lib/FirelinkCore/CMakeLists.txt), so they have no
+# export sets of their own for FirelinkTargets to refer to.
+if(WIN32)
+    install(EXPORT FirelinkTargets
+            FILE FirelinkTargets.cmake
+            NAMESPACE Firelink::
+            DESTINATION lib/cmake/Firelink
+    )
+endif()
 
 # If this is not scikit-build, install `pyrelink` folder of bindings.
 if(NOT DEFINED SKBUILD)

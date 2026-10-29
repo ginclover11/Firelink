@@ -1,5 +1,7 @@
 #include <FirelinkCore/Paths.h>
 
+#include <algorithm>
+#include <cctype>
 #include <ranges>
 
 std::string Firelink::ToLower(const std::string& s)
