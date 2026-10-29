@@ -201,6 +201,13 @@ macro(get_firelink_core_dependencies)
     set(BUILD_TOOLS    OFF CACHE BOOL "" FORCE)
     set(BUILD_SAMPLE   OFF CACHE BOOL "" FORCE)
     set(BUILD_TESTING  OFF CACHE BOOL "" FORCE)
+    if(NOT WIN32)
+        # Software BC6H/BC7 compression can use OpenMP, but GCC 16's <omp.h> fails to compile in DirectXTexCompress.cpp
+        # (default-argument macros in its `omp_depend_t` declarations), so it is off by default outside Windows. The
+        # only cost is that BC6H/BC7 compression runs on one thread (BC1-BC5 never used OpenMP).
+        option(FIRELINK_DIRECTXTEX_OPENMP "Build DirectXTex with OpenMP (multi-threaded BC6H/BC7 compression)" OFF)
+        set(BC_USE_OPENMP ${FIRELINK_DIRECTXTEX_OPENMP} CACHE BOOL "" FORCE)
+    endif()
     FetchContent_MakeAvailable(DirectXTex)
 endmacro()
 
