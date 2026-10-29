@@ -24,6 +24,14 @@ namespace Firelink
 {
     namespace
     {
+        /// `TEX_COMPRESS_PARALLEL` makes DirectXTex's `Compress` fail with E_NOTIMPL if DirectXTex was built without
+        /// OpenMP. Outside Windows we build it without OpenMP unless `FIRELINK_DIRECTXTEX_OPENMP` is set (see CMake).
+#if defined(_WIN32) || defined(FIRELINK_DIRECTXTEX_OPENMP)
+        constexpr DirectX::TEX_COMPRESS_FLAGS kCompressParallel = DirectX::TEX_COMPRESS_PARALLEL;
+#else
+        constexpr DirectX::TEX_COMPRESS_FLAGS kCompressParallel = DirectX::TEX_COMPRESS_DEFAULT;
+#endif
+
 #ifdef _WIN32
         /// Initialise COM once for the lifetime of the process.
         /// SaveToWICMemory (PNG output) and D3D11 device creation require COM.
@@ -365,7 +373,7 @@ namespace Firelink
                     if (FAILED(hr))
                     {
                         hr = Compress(*img, targetFormat,
-                                      TEX_COMPRESS_PARALLEL, TEX_THRESHOLD_DEFAULT, result);
+                                      kCompressParallel, TEX_THRESHOLD_DEFAULT, result);
                     }
 
                     if (FAILED(hr))
@@ -434,7 +442,7 @@ namespace Firelink
                 const HRESULT hr = IsCompressed(targetFormat)
                     ? Compress(
                         source->GetImages(), source->GetImageCount(), source->GetMetadata(), targetFormat,
-                        TEX_COMPRESS_PARALLEL, TEX_THRESHOLD_DEFAULT, converted)
+                        kCompressParallel, TEX_THRESHOLD_DEFAULT, converted)
                     : Convert(
                         source->GetImages(), source->GetImageCount(), source->GetMetadata(), targetFormat,
                         TEX_FILTER_DEFAULT, TEX_THRESHOLD_DEFAULT, converted);

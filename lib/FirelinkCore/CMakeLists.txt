@@ -245,6 +245,9 @@ else()
     # FirelinkCore (the pybind modules, FLVER, ...) needs the DirectX-Headers include paths too. On Windows the Windows SDK
     # provides that header.
     target_link_libraries(FirelinkCore PUBLIC Microsoft::DirectX-Headers)
+    if(FIRELINK_DIRECTXTEX_OPENMP)
+        target_compile_definitions(FirelinkCore PRIVATE FIRELINK_DIRECTXTEX_OPENMP)
+    endif()
 endif()
 
 install(TARGETS FirelinkCore
