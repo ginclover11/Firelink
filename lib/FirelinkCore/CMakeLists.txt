@@ -159,7 +159,9 @@ macro(get_firelink_core_dependencies)
         )
         set(DXHEADERS_BUILD_TEST        OFF CACHE BOOL "" FORCE)
         set(DXHEADERS_BUILD_GOOGLE_TEST OFF CACHE BOOL "" FORCE)
-        set(DXHEADERS_INSTALL           OFF CACHE BOOL "" FORCE)
+        # ON: DirectXTex exports itself with install(EXPORT) and CMake insists that everything it links is in an export set too.
+        # (The install rules themselves are never run: all fetched dependencies are EXCLUDE_FROM_ALL.)
+        set(DXHEADERS_INSTALL           ON  CACHE BOOL "" FORCE)
         FetchContent_MakeAvailable(directxmath directx-headers)
 
         # DirectXMath (and DirectXTex) include "sal.h" (MSVC source annotations), which only exists on Windows. The .NET
@@ -171,7 +173,8 @@ macro(get_firelink_core_dependencies)
             DOWNLOAD_NO_EXTRACT TRUE
         )
         FetchContent_MakeAvailable(sal)
-        target_include_directories(DirectXMath INTERFACE "${sal_SOURCE_DIR}")
+        # BUILD_INTERFACE: DirectXMath exports itself with install(EXPORT), and build-tree paths must not leak into that export.
+        target_include_directories(DirectXMath INTERFACE "$<BUILD_INTERFACE:${sal_SOURCE_DIR}>")
 
         # DirectXMath only defines its namespaced target when installed; DirectXTex links the namespaced name.
         if(NOT TARGET Microsoft::DirectXMath)
