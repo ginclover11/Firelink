@@ -241,6 +241,10 @@ else()
         Threads::Threads
         ${CMAKE_DL_LIBS})
     target_include_directories(FirelinkCore PRIVATE "${stb_SOURCE_DIR}")
+    # Public headers (DDS.h, Swizzle.h) include <directx/dxgiformat.h> for the DXGI_FORMAT enum, so everything that links
+    # FirelinkCore (the pybind modules, FLVER, ...) needs the DirectX-Headers include paths too. On Windows the Windows SDK
+    # provides that header.
+    target_link_libraries(FirelinkCore PUBLIC Microsoft::DirectX-Headers)
 endif()
 
 install(TARGETS FirelinkCore
