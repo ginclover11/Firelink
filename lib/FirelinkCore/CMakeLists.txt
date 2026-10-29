@@ -202,6 +202,10 @@ macro(get_firelink_core_dependencies)
     set(BUILD_SAMPLE   OFF CACHE BOOL "" FORCE)
     set(BUILD_TESTING  OFF CACHE BOOL "" FORCE)
     if(NOT WIN32)
+        # No GPU paths outside Windows: DirectXTexD3D12.cpp needs the full d3dx12 header set (e.g. E_ILLEGAL_STATE_CHANGE)
+        # that the WSL stubs do not provide, and Firelink never calls the D3D11/D3D12 helpers.
+        set(BUILD_DX11 OFF CACHE BOOL "" FORCE)
+        set(BUILD_DX12 OFF CACHE BOOL "" FORCE)
         # Software BC6H/BC7 compression can use OpenMP, but GCC 16's <omp.h> fails to compile in DirectXTexCompress.cpp
         # (default-argument macros in its `omp_depend_t` declarations), so it is off by default outside Windows. The
         # only cost is that BC6H/BC7 compression runs on one thread (BC1-BC5 never used OpenMP).
