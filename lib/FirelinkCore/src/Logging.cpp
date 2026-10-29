@@ -1,14 +1,22 @@
 ﻿#include <FirelinkCore/Logging.h>
 #include <FirelinkCore/MemoryUtils.h>
 
+#include <cerrno>
 #include <chrono>
+#include <cstring>
 #include <ctime>
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <mutex>
 #include <sstream>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 namespace
 {
@@ -28,12 +36,21 @@ namespace
         // Create a tm structure to store local time
         tm timeInfo{};
 
+#ifdef _WIN32
         // Use localtime_s instead of localtime to avoid C4996 error
         if (const auto result = localtime_s(&timeInfo, &inTimeT); result != 0)
         {
             std::cerr << "Error getting current logging time: " << result << '\n';
             return "";
         }
+#else
+        // POSIX equivalent (thread-safe, unlike `localtime`).
+        if (localtime_r(&inTimeT, &timeInfo) == nullptr)
+        {
+            std::cerr << "Error getting current logging time: " << errno << '\n';
+            return "";
+        }
+#endif
 
         // Format the time into a std::string
         std::stringstream ss;
@@ -136,6 +153,7 @@ void Firelink::WinError(const std::string& message)
 {
     if (LOG_LEVEL > LogLevel::ERR)
         return;
+#ifdef _WIN32
     const DWORD errorCode = GetLastError();
     LPSTR errorBuffer = nullptr;
     FormatMessage(
@@ -149,4 +167,9 @@ void Firelink::WinError(const std::string& message)
     const std::string errorMessage = std::format("{} (WinError {}): {}", message, std::to_string(errorCode), errorBuffer);
     LocalFree(errorBuffer);
     Error(errorMessage);
+#else
+    // No Win32 last-error on this platform; report `errno` instead.
+    const int errorCode = errno;
+    Error(std::format("{} (errno {}): {}", message, errorCode, std::strerror(errorCode)));
+#endif
 }

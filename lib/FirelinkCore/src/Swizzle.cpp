@@ -314,7 +314,6 @@ namespace Firelink
         return result;
     }
 
-#ifdef _WIN32
 
     // =========================================================================
     // DXGI format helpers
@@ -433,7 +432,6 @@ namespace Firelink
         return SwizzlePS4(data, size, width, height, mipCount, textureCount, bpb, ppb);
     }
 
-#endif // _WIN32
 
 } // namespace Firelink
 

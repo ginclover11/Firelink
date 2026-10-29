@@ -20,6 +20,8 @@
 
 #ifdef _WIN32
 #include <dxgiformat.h>    // DXGI_FORMAT
+#else
+#include <directx/dxgiformat.h>    // DXGI_FORMAT (DirectX-Headers package)
 #endif
 
 namespace Firelink
@@ -62,7 +64,6 @@ namespace Firelink
         int mipCount, int textureCount,
         int bytesPerBlock, int pixelsPerBlock);
 
-#ifdef _WIN32
     // -------------------------------------------------------------------------
     // DXGI_FORMAT convenience overloads
     // Derives bytesPerBlock and pixelsPerBlock from the format automatically.
@@ -92,7 +93,6 @@ namespace Firelink
     /// @brief Pixels per block side (4 for BCn, 1 for uncompressed).
     ///        Returns 0 for unrecognized formats.
     [[nodiscard]] FIRELINK_CORE_API int PS4PixelsPerBlock(DXGI_FORMAT format) noexcept;
-#endif
 
 } // namespace Firelink
 

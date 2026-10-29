@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 
 namespace Firelink
@@ -15,7 +17,7 @@ namespace Firelink
     std::string ToString(FSEncoding encoding);
 
     /// @brief Decode raw FromSoft bytes to UTF-8 using given supported FromSoftEncoding.
-    std::string DecodeString(const char* encoded, size_t byteLen, FSEncoding encoding);
+    std::string DecodeString(const char* encoded, std::size_t byteLen, FSEncoding encoding);
 
     /// @brief Decode a FromSoft string to UTF-8 using given supported FromSoftEncoding.
     std::string DecodeString(const std::string& encoded, FSEncoding encoding);

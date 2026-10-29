@@ -7,6 +7,15 @@ project(Firelink VERSION 0.3.4 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(NOT WIN32)
+    # The pybind11 modules statically link FirelinkCore and its dependencies (zlib, zstd, DirectXTex...) and are loaded
+    # into a host process (Blender) that has its own copies of some of those libraries. Keep our symbols private so they
+    # can neither clash with nor be interposed by the host's.
+    set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+    set(CMAKE_C_VISIBILITY_PRESET hidden)
+    set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
+endif()
+
 option(FIRELINK_BUILD_TESTS      "Build doctest-based unit tests for FirelinkCore libraries" ON)
 option(FIRELINK_BUILD_PYBIND    "Build pybind11 Python extension modules for Firelink"      ON)
 

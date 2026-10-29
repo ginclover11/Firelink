@@ -2,10 +2,8 @@
 
 target_sources(FirelinkCore
     PRIVATE
-    src/dllmain.cpp
     src/pch.h
     src/pch.cpp
-    src/BaseHook.cpp
     src/Binder.cpp
     src/BinaryReadWrite.cpp
     src/Collections.cpp
@@ -16,8 +14,6 @@ target_sources(FirelinkCore
     src/Logging.cpp
     src/Oodle.cpp
     src/Paths.cpp
-    src/Pointer.cpp
-    src/Process.cpp
     src/Swizzle.cpp
     src/TPF.cpp
     src/MemoryUtils.cpp
@@ -27,6 +23,22 @@ target_sources(FirelinkCore
     src/Havok/Types.cpp
     src/Havok/TagfileUnpacker.cpp
 )
+
+# Windows-only: the DLL entry point and the process/memory-hooking machinery (`ManagedProcess`, `Pointer`, `BaseHook`)
+# used by the game hooks. None of the file-format code (Binder, DCX, TPF, FLVER, MSB...) depends on these.
+if(WIN32)
+    target_sources(FirelinkCore
+        PRIVATE
+        src/dllmain.cpp
+        src/BaseHook.cpp
+        src/Pointer.cpp
+        src/Process.cpp
+    )
+else()
+    # PNG conversion without WIC (stb_image / stb_image_write).
+    target_sources(FirelinkCore PRIVATE src/PngCodec.cpp)
+endif()
+
 target_sources(FirelinkCore
     PUBLIC
     FILE_SET HEADERS
@@ -108,6 +120,42 @@ macro(get_firelink_core_dependencies)
     #    "${zstd_SOURCE_DIR}/lib"
     #)
 
+    # --- DirectXMath / DirectX-Headers / stb (non-Windows only) ---
+    # On Windows, DirectXTex uses the Windows SDK. Everywhere else it needs the DirectXMath and DirectX-Headers packages
+    # (DXGI format enums, SAL/HRESULT adapters), which we fetch here. Populating them with FetchContent also makes
+    # DirectXTex's own `find_package(directxmath)` / `find_package(directx-headers)` calls resolve to these copies.
+    # `stb` provides PNG I/O in place of WIC (see src/PngCodec.cpp); it is header-only and has no CMakeLists.
+    if(NOT WIN32)
+        FetchContent_Declare(
+            directxmath
+            GIT_REPOSITORY https://github.com/microsoft/DirectXMath.git
+            GIT_TAG        oct2024
+            GIT_SHALLOW    TRUE
+        )
+        FetchContent_Declare(
+            directx-headers
+            GIT_REPOSITORY https://github.com/microsoft/DirectX-Headers.git
+            GIT_TAG        v1.721.2
+            GIT_SHALLOW    TRUE
+        )
+        set(DXHEADERS_BUILD_TEST        OFF CACHE BOOL "" FORCE)
+        set(DXHEADERS_BUILD_GOOGLE_TEST OFF CACHE BOOL "" FORCE)
+        set(DXHEADERS_INSTALL           OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(directxmath directx-headers)
+
+        # DirectXMath only defines its namespaced target when installed; DirectXTex links the namespaced name.
+        if(NOT TARGET Microsoft::DirectXMath)
+            add_library(Microsoft::DirectXMath ALIAS DirectXMath)
+        endif()
+
+        FetchContent_Declare(
+            stb
+            GIT_REPOSITORY https://github.com/nothings/stb.git
+            GIT_TAG        003501f6d7a8668ce8b6d875e34dd97ad0d5d5b5
+        )
+        FetchContent_MakeAvailable(stb)
+    endif()
+
     # --- DirectXTex ---
     # In-memory DDS conversion (LoadFromDDSMemory, Decompress, Convert,
     # SaveToTGAMemory, SaveToWICMemory).  We only need the static library.
@@ -126,16 +174,29 @@ get_firelink_core_dependencies()
 
 
 # Link against the fetched dependencies.
-# ole32   — COM / WIC (PNG output via SaveToWICMemory)
-# d3d11   — GPU-accelerated BC6H/BC7 compression via DirectCompute
-# dxgi    — DXGI adapter enumeration for D3D11 device creation
-target_link_libraries(FirelinkCore PRIVATE
-    zlibstatic
-    libzstd_static
-    DirectXTex
-    ole32.lib
-    d3d11.lib
-    dxgi.lib)
+if(WIN32)
+    # ole32   — COM / WIC (PNG output via SaveToWICMemory)
+    # d3d11   — GPU-accelerated BC6H/BC7 compression via DirectCompute
+    # dxgi    — DXGI adapter enumeration for D3D11 device creation
+    target_link_libraries(FirelinkCore PRIVATE
+        zlibstatic
+        libzstd_static
+        DirectXTex
+        ole32.lib
+        d3d11.lib
+        dxgi.lib)
+else()
+    # No WIC/D3D11 here: PNG goes through stb, and BC6H/BC7 are compressed on the CPU.
+    # Threads: `std::thread` is used for parallel file loading. ${CMAKE_DL_LIBS}: `dlopen` for the Oodle library.
+    find_package(Threads REQUIRED)
+    target_link_libraries(FirelinkCore PRIVATE
+        zlibstatic
+        libzstd_static
+        DirectXTex
+        Threads::Threads
+        ${CMAKE_DL_LIBS})
+    target_include_directories(FirelinkCore PRIVATE "${stb_SOURCE_DIR}")
+endif()
 
 install(TARGETS FirelinkCore
         EXPORT FirelinkTargets

@@ -9,6 +9,8 @@
 
 #ifdef _WIN32
 #include <dxgiformat.h>    // DXGI_FORMAT enum
+#else
+#include <directx/dxgiformat.h>    // DXGI_FORMAT enum (DirectX-Headers package)
 #endif
 
 namespace Firelink
@@ -83,11 +85,20 @@ namespace Firelink
         /// @brief Convert TGA data to DDS with the given format.
         /// @note Block-compressed formats (BC1–BC7) are supported; the source pixels are
         /// automatically compressed. Uses TEX_COMPRESS_PARALLEL internally for speed.
-        [[nodiscard]] static DDS FromTGA(const std::byte* data, size_t size, DXGI_FORMAT targetFormat);
+        /// @param mipLevels Number of mip levels to generate: 1 (default) writes the base image only, 0 generates the
+        ///        full chain, N > 1 generates N levels. Mirrors `texconv -m`.
+        /// @param forceDX10 Always write the extended DX10 header (`texconv -dx10`).
+        [[nodiscard]] static DDS FromTGA(
+            const std::byte* data, size_t size, DXGI_FORMAT targetFormat,
+            size_t mipLevels = 1, bool forceDX10 = false);
         /// @brief Convert PNG data to DDS with the given format.
         /// @note Block-compressed formats (BC1–BC7) are supported; the source pixels are
         /// automatically compressed. Uses TEX_COMPRESS_PARALLEL internally for speed.
-        [[nodiscard]] static DDS FromPNG(const std::byte* data, size_t size, DXGI_FORMAT targetFormat);
+        /// @param mipLevels See `FromTGA`.
+        /// @param forceDX10 See `FromTGA`.
+        [[nodiscard]] static DDS FromPNG(
+            const std::byte* data, size_t size, DXGI_FORMAT targetFormat,
+            size_t mipLevels = 1, bool forceDX10 = false);
 
         /// @brief Build a DDS by prepending a synthesized header to headerless pixel data.
         /// @note Used for console TPF textures, which store the mip chain with no DDS header.

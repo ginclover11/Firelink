@@ -460,6 +460,17 @@ class DXGIFormat(IntEnum):
     R16G16B16A16_FLOAT = 10
     R32_FLOAT = 41
     R32G32B32A32_FLOAT = 2
+    R10G10B10A2_UNORM = 24
+    R11G11B10_FLOAT = 26
+    R16G16B16A16_UNORM = 11
+    R16G16_UNORM = 35
+    R16_UNORM = 56
+    A8_UNORM = 65
+    B5G6R5_UNORM = 85
+    B5G5R5A1_UNORM = 86
+    B8G8R8X8_UNORM = 88
+    B8G8R8X8_UNORM_SRGB = 93
+    B4G4R4A4_UNORM = 115
 
 class DDS:
     """DDS texture container.
@@ -474,18 +485,23 @@ class DDS:
         ...
 
     @staticmethod
-    def from_tga(data: Union[bytes, bytearray, memoryview], format: DXGIFormat) -> DDS:
+    def from_tga(data: Union[bytes, bytearray, memoryview], format: DXGIFormat, mip_levels: int = 1, force_dx10: bool = False) -> DDS:
         """Convert TGA image bytes to DDS with the given DXGI format.
 
-        BC6H/BC7 compression uses GPU acceleration when available.
+        `mip_levels`: 1 (default) writes only the base image, 0 generates the full mip chain, N > 1 generates N levels
+        (like `texconv -m`). `force_dx10` always writes the extended DX10 header (like `texconv -dx10`).
+
+        On Windows, BC6H/BC7 compression uses GPU acceleration when available (base image only).
         """
         ...
 
     @staticmethod
-    def from_png(data: Union[bytes, bytearray, memoryview], format: DXGIFormat) -> DDS:
+    def from_png(data: Union[bytes, bytearray, memoryview], format: DXGIFormat, mip_levels: int = 1, force_dx10: bool = False) -> DDS:
         """Convert PNG image bytes to DDS with the given DXGI format.
 
-        BC6H/BC7 compression uses GPU acceleration when available.
+        `mip_levels` and `force_dx10` behave as in `from_tga`.
+
+        On Windows, BC6H/BC7 compression uses GPU acceleration when available (base image only).
         """
         ...
 

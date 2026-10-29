@@ -41,6 +41,18 @@ macro(configure_install_pybind_module target_name install_path)
         OUTPUT_NAME _bindings
     )
 
+    if(UNIX AND NOT APPLE)
+        # Make the extension module self-contained so one wheel works across distributions and inside a host application:
+        #  - static libstdc++/libgcc: do not require the system's libstdc++ to be at least as new as our compiler's
+        #  - --exclude-libs ALL: do not re-export symbols from the static libraries we link (zlib, zstd, ...)
+        #  - -Bsymbolic: resolve our own symbols inside the module, never to a same-named symbol elsewhere in the process
+        target_link_options(${target_name} PRIVATE
+            -static-libstdc++ -static-libgcc
+            -Wl,--exclude-libs,ALL
+            -Wl,-Bsymbolic
+        )
+    endif()
+
     # Install the module
     install(TARGETS ${target_name}
             RUNTIME DESTINATION pyrelink/${install_path}

@@ -101,7 +101,8 @@ const void* Firelink::GetOffsetPointer(const void* ptr, const int offset)
     return static_cast<const char*>(ptr) + offset;
 }
 
-bool Firelink::ParsePatternString(const std::string& patternString, std::vector<BYTE>& pattern, std::vector<bool>& wildcardMask)
+bool Firelink::ParsePatternString(
+    const std::string& patternString, std::vector<std::uint8_t>& pattern, std::vector<bool>& wildcardMask)
 {
     std::istringstream stream(patternString);
     std::string token;
@@ -123,7 +124,7 @@ bool Firelink::ParsePatternString(const std::string& patternString, std::vector<
             // Parse hex byte
             try
             {
-                BYTE byte = static_cast<BYTE>(stoul(token, nullptr, 16));
+                const auto byte = static_cast<std::uint8_t>(std::stoul(token, nullptr, 16));
                 pattern.push_back(byte);
                 wildcardMask.push_back(false);
             }

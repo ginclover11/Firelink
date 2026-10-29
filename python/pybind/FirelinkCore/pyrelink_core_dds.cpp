@@ -47,7 +47,19 @@ void bind_firelink_core_dds(py::module& m)
         .value("R16G16_FLOAT",         DXGI_FORMAT_R16G16_FLOAT)
         .value("R16G16B16A16_FLOAT",   DXGI_FORMAT_R16G16B16A16_FLOAT)
         .value("R32_FLOAT",            DXGI_FORMAT_R32_FLOAT)
-        .value("R32G32B32A32_FLOAT",   DXGI_FORMAT_R32G32B32A32_FLOAT);
+        .value("R32G32B32A32_FLOAT",   DXGI_FORMAT_R32G32B32A32_FLOAT)
+        // Additional formats reachable through legacy/DX10 DDS headers (needed to cover every `texconv -f` name).
+        .value("A8_UNORM",             DXGI_FORMAT_A8_UNORM)
+        .value("B8G8R8X8_UNORM",       DXGI_FORMAT_B8G8R8X8_UNORM)
+        .value("B8G8R8X8_UNORM_SRGB",  DXGI_FORMAT_B8G8R8X8_UNORM_SRGB)
+        .value("B5G6R5_UNORM",         DXGI_FORMAT_B5G6R5_UNORM)
+        .value("B5G5R5A1_UNORM",       DXGI_FORMAT_B5G5R5A1_UNORM)
+        .value("B4G4R4A4_UNORM",       DXGI_FORMAT_B4G4R4A4_UNORM)
+        .value("R10G10B10A2_UNORM",    DXGI_FORMAT_R10G10B10A2_UNORM)
+        .value("R11G11B10_FLOAT",      DXGI_FORMAT_R11G11B10_FLOAT)
+        .value("R16_UNORM",            DXGI_FORMAT_R16_UNORM)
+        .value("R16G16_UNORM",         DXGI_FORMAT_R16G16_UNORM)
+        .value("R16G16B16A16_UNORM",   DXGI_FORMAT_R16G16B16A16_UNORM);
 
     // -------------------------------------------------------------------------
     // DDS class
@@ -68,33 +80,36 @@ void bind_firelink_core_dds(py::module& m)
         py::arg("data"),
         "Construct from raw DDS bytes (bytes / bytearray / memoryview).")
 
-        .def_static("from_tga", [](const py::buffer& buf, DXGI_FORMAT fmt)
+        .def_static("from_tga", [](const py::buffer& buf, DXGI_FORMAT fmt, std::size_t mip_levels, bool force_dx10)
         {
             auto [ptr, size] = borrow_buffer(buf);
             DDS result;
             {
                 py::gil_scoped_release release;
-                result = DDS::FromTGA(ptr, size, fmt);
+                result = DDS::FromTGA(ptr, size, fmt, mip_levels, force_dx10);
             }
             return result;
         },
-        py::arg("data"), py::arg("format"),
+        py::arg("data"), py::arg("format"), py::arg("mip_levels") = 1, py::arg("force_dx10") = false,
         "Convert TGA image bytes to DDS with the given DXGI format.\n\n"
-        "BC6H/BC7 compression uses GPU acceleration when available.")
+        "`mip_levels`: 1 (default) writes only the base image, 0 generates the full mip chain, N > 1 generates N "
+        "levels (like `texconv -m`). `force_dx10` always writes the extended DX10 header (like `texconv -dx10`).\n\n"
+        "On Windows, BC6H/BC7 compression uses GPU acceleration when available (base image only).")
 
-        .def_static("from_png", [](const py::buffer& buf, DXGI_FORMAT fmt)
+        .def_static("from_png", [](const py::buffer& buf, DXGI_FORMAT fmt, std::size_t mip_levels, bool force_dx10)
         {
             auto [ptr, size] = borrow_buffer(buf);
             DDS result;
             {
                 py::gil_scoped_release release;
-                result = DDS::FromPNG(ptr, size, fmt);
+                result = DDS::FromPNG(ptr, size, fmt, mip_levels, force_dx10);
             }
             return result;
         },
-        py::arg("data"), py::arg("format"),
+        py::arg("data"), py::arg("format"), py::arg("mip_levels") = 1, py::arg("force_dx10") = false,
         "Convert PNG image bytes to DDS with the given DXGI format.\n\n"
-        "BC6H/BC7 compression uses GPU acceleration when available.")
+        "`mip_levels` and `force_dx10` behave as in `from_tga`.\n\n"
+        "On Windows, BC6H/BC7 compression uses GPU acceleration when available (base image only).")
 
         // --- Properties ---
 

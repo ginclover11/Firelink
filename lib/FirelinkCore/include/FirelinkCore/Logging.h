@@ -3,7 +3,9 @@
 #include <FirelinkCore/Export.h>
 
 #include <filesystem>
+#include <format>
 #include <string>
+#include <utility>
 
 namespace Firelink
 {
@@ -26,7 +28,7 @@ namespace Firelink
     FIRELINK_CORE_API void Info(const std::string& message);
     FIRELINK_CORE_API void Warning(const std::string& message);
     FIRELINK_CORE_API void Error(const std::string& message);
-    // Calls `GetLastError()` and appends it automatically.
+    // Calls `GetLastError()` (Windows) or reads `errno` (other platforms) and appends it automatically.
     FIRELINK_CORE_API void WinError(const std::string& message);
 
     // Template versions with variadic `std::format` args.

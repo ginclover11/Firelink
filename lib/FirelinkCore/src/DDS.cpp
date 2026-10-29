@@ -14,6 +14,8 @@
 #include <wincodec.h>      // GUID_ContainerFormatPng
 #include <d3d11.h>
 #include <wrl/client.h>    // Microsoft::WRL::ComPtr
+#else
+#include "PngCodec.h"      // stb-based PNG codec (no WIC outside Windows)
 #endif
 
 #include <DirectXTex.h>
@@ -322,7 +324,7 @@ namespace Firelink
         /// Compress or convert an uncompressed image to the target format and
         /// save as an in-memory DDS blob.  Uses GPU-accelerated DirectCompute
         /// for BC6H/BC7 when available, falling back to CPU + OpenMP.
-        std::vector<std::byte> CompressAndSaveDDS(
+        std::vector<std::byte> CompressAndSaveBaseImageDDS(
             const DirectX::ScratchImage& image, const DXGI_FORMAT targetFormat)
         {
             using namespace DirectX;
@@ -393,6 +395,68 @@ namespace Firelink
 
             return BlobToVector(blob);
         }
+
+        /// Like `CompressAndSaveBaseImageDDS`, but can also generate a mip chain and force the DX10 header. This mirrors
+        /// the `texconv -m <levels>` and `texconv -dx10` options.
+        ///
+        /// With `mipLevels == 1` and `forceDX10 == false` this is exactly the base-image path (unchanged behaviour).
+        /// `mipLevels == 0` generates the full chain. The BC6H/BC7 GPU path is not used when mips are requested; every
+        /// level goes through DirectXTex's CPU encoder.
+        std::vector<std::byte> CompressAndSaveDDS(
+            const DirectX::ScratchImage& image, const DXGI_FORMAT targetFormat,
+            const std::size_t mipLevels = 1, const bool forceDX10 = false)
+        {
+            if (mipLevels == 1 && !forceDX10)
+                return CompressAndSaveBaseImageDDS(image, targetFormat);
+
+            using namespace DirectX;
+
+            const Image* base = image.GetImage(0, 0, 0);
+            if (!base)
+                throw std::runtime_error("CompressAndSaveDDS: failed to get source image");
+
+            // 1. Build the mip chain from the (uncompressed) source image.
+            ScratchImage chain;
+            const ScratchImage* source = &image;
+            if (mipLevels != 1)
+            {
+                if (const HRESULT hr = GenerateMipMaps(*base, TEX_FILTER_DEFAULT, mipLevels, chain); FAILED(hr))
+                    throw std::runtime_error(
+                        "CompressAndSaveDDS: GenerateMipMaps failed (" + HResultToString(hr) + ")");
+                source = &chain;
+            }
+
+            // 2. Convert/compress every level to the target format.
+            ScratchImage converted;
+            const ScratchImage* output = source;
+            if (source->GetMetadata().format != targetFormat)
+            {
+                const HRESULT hr = IsCompressed(targetFormat)
+                    ? Compress(
+                        source->GetImages(), source->GetImageCount(), source->GetMetadata(), targetFormat,
+                        TEX_COMPRESS_PARALLEL, TEX_THRESHOLD_DEFAULT, converted)
+                    : Convert(
+                        source->GetImages(), source->GetImageCount(), source->GetMetadata(), targetFormat,
+                        TEX_FILTER_DEFAULT, TEX_THRESHOLD_DEFAULT, converted);
+                if (FAILED(hr))
+                    throw std::runtime_error(
+                        "CompressAndSaveDDS: " + std::string(IsCompressed(targetFormat) ? "Compress" : "Convert")
+                        + " failed (" + HResultToString(hr) + ")");
+                output = &converted;
+            }
+
+            // 3. Serialize, optionally forcing the extended DX10 header.
+            Blob blob;
+            if (const HRESULT hr = SaveToDDSMemory(
+                    output->GetImages(), output->GetImageCount(), output->GetMetadata(),
+                    forceDX10 ? DDS_FLAGS_FORCE_DX10_EXT : DDS_FLAGS_NONE, blob);
+                FAILED(hr))
+                throw std::runtime_error(
+                    "CompressAndSaveDDS: SaveToDDSMemory failed (" + HResultToString(hr) + ")");
+
+            return BlobToVector(blob);
+        }
+
         // -----------------------------------------------------------------------
         // Headerless (console) DDS helpers
         // -----------------------------------------------------------------------
@@ -624,6 +688,7 @@ namespace Firelink
         if (!img)
             throw std::runtime_error("ConvertDDSToPNG: failed to get image for save");
 
+#ifdef _WIN32
         Blob blob;
         const HRESULT hr = SaveToWICMemory(*img, WIC_FLAGS_NONE,
                                            GUID_ContainerFormatPng, blob);
@@ -632,9 +697,26 @@ namespace Firelink
                 "ConvertDDSToPNG: SaveToWICMemory failed (" + HResultToString(hr) + ")");
 
         return BlobToVector(blob);
+#else
+        // No WIC: swizzle B8G8R8A8 -> R8G8B8A8 with DirectXTex, then encode with stb_image_write.
+        ScratchImage rgba;
+        if (const HRESULT hr = Convert(
+                *img, DXGI_FORMAT_R8G8B8A8_UNORM, TEX_FILTER_DEFAULT, TEX_THRESHOLD_DEFAULT, rgba);
+            FAILED(hr))
+            throw std::runtime_error("ConvertDDSToPNG: Convert failed (" + HResultToString(hr) + ")");
+
+        const Image* out = rgba.GetImage(0, 0, 0);
+        if (!out)
+            throw std::runtime_error("ConvertDDSToPNG: failed to get converted image");
+
+        return PngCodec::EncodeRGBA(out->pixels, static_cast<int>(out->width), static_cast<int>(out->height),
+                                    out->rowPitch);
+#endif
     }
 
-    DDS DDS::FromTGA(const std::byte* data, const size_t size, const DXGI_FORMAT targetFormat)
+    DDS DDS::FromTGA(
+        const std::byte* data, const size_t size, const DXGI_FORMAT targetFormat,
+        const size_t mipLevels, const bool forceDX10)
     {
         using namespace DirectX;
 
@@ -647,26 +729,44 @@ namespace Firelink
             throw std::runtime_error(
                 "ConvertTGAToDDS: LoadFromTGAMemory failed (" + HResultToString(hr) + ")");
 
-        return DDS(CompressAndSaveDDS(image, targetFormat));
+        return DDS(CompressAndSaveDDS(image, targetFormat, mipLevels, forceDX10));
     }
 
-    DDS DDS::FromPNG(const std::byte* data, const size_t size, const DXGI_FORMAT targetFormat)
+    DDS DDS::FromPNG(
+        const std::byte* data, const size_t size, const DXGI_FORMAT targetFormat,
+        const size_t mipLevels, const bool forceDX10)
     {
+        using namespace DirectX;
+        ScratchImage image;
+
 #ifdef _WIN32
         EnsureCOMInitialised();
-#endif
-        using namespace DirectX;
 
         TexMetadata metadata{};
-        ScratchImage image;
         const HRESULT hr = LoadFromWICMemory(
             reinterpret_cast<const uint8_t*>(data), size,
             WIC_FLAGS_NONE, &metadata, image);
         if (FAILED(hr))
             throw std::runtime_error(
                 "ConvertPNGToDDS: LoadFromWICMemory failed (" + HResultToString(hr) + ")");
+#else
+        // No WIC: decode with stb_image into an R8G8B8A8_UNORM ScratchImage.
+        const PngCodec::DecodedImage decoded = PngCodec::DecodeToRGBA(reinterpret_cast<const uint8_t*>(data), size);
+        if (const HRESULT hr = image.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, decoded.width, decoded.height, 1, 1);
+            FAILED(hr))
+            throw std::runtime_error(
+                "ConvertPNGToDDS: ScratchImage::Initialize2D failed (" + HResultToString(hr) + ")");
 
-        return DDS(CompressAndSaveDDS(image, targetFormat));
+        const Image* dest = image.GetImage(0, 0, 0);
+        if (!dest)
+            throw std::runtime_error("ConvertPNGToDDS: failed to get destination image");
+        const std::size_t srcPitch = static_cast<std::size_t>(decoded.width) * 4;
+        for (int y = 0; y < decoded.height; ++y)
+            std::memcpy(dest->pixels + static_cast<std::size_t>(y) * dest->rowPitch,
+                        decoded.rgba.data() + static_cast<std::size_t>(y) * srcPitch, srcPitch);
+#endif
+
+        return DDS(CompressAndSaveDDS(image, targetFormat, mipLevels, forceDX10));
     }
 
     // --- PS4 GNF swizzle --------------------------------------------------------
